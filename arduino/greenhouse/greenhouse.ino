@@ -23,11 +23,11 @@ void setup() {
 	digitalWrite(HEATER_PIN, HIGH);
 	isHeaterOn = false;
 	pinMode(LIGHT_PIN, OUTPUT);
-	digitalWrite(LIGHT_PIN, HIGH);
+	digitalWrite(LIGHT_PIN, LOW);
 	isLightOn = true;
 	time.begin();
   dht.begin();
-	time.settime(0,16,16,28,10,18,7);
+	//time.settime(0,51,8,3,11,18,6);
 }
 
 void loop() {
