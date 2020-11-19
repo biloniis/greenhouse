@@ -15,8 +15,8 @@
 #define RELAY_PIN 2
 
 #ifndef STASSID
-#define STASSID "ASUS_60_2G"
-#define STAPSK  "kir12bo8"
+#define STASSID "wifissid"
+#define STAPSK  "passwords"
 #endif 
 // создаём объект для работы с библиотекой OneWire
 OneWire oneWire(ONE_WIRE_BUS);
