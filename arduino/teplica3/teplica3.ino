@@ -33,6 +33,8 @@ DTime currentTime;
 unsigned int localPort = 2390;      // local port to listen for UDP packets
 unsigned int porogTemp = 22;
 
+int hysteresis = 2;
+
 /* Don't hardwire the IP address or we won't get the benefits of the pool.
     Lookup the IP address for the host name instead */
 //IPAddress timeServer(129, 6, 15, 28); // time.nist.gov NTP server
@@ -158,12 +160,12 @@ void displayTemp(float temperature, String ntpTime, boolean isHeat)
 
 boolean relayControl(float temperature)
 {
-   if(temperature>porogTemp)
+   if(temperature > porogTemp)
   {
     digitalWrite(RELAY_PIN,HIGH);
     return false; 
   }
-  else
+  if(temperature < porogTemp-hysteresis)
   {
     digitalWrite(RELAY_PIN,LOW);
     return true;
