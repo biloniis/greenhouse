@@ -9,7 +9,7 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <DTime.h>
- 
+
 // сигнальный провод датчика
 #define ONE_WIRE_BUS 0
 #define RELAY_PIN 2
@@ -17,10 +17,10 @@
 #ifndef STASSID
 #define STASSID "wifissid"
 #define STAPSK  "passwords"
-#endif 
+#endif
 // создаём объект для работы с библиотекой OneWire
 OneWire oneWire(ONE_WIRE_BUS);
- 
+
 // создадим объект для работы с библиотекой DallasTemperature
 DallasTemperature sensor(&oneWire);
 
@@ -31,9 +31,11 @@ const char * pass = STAPSK;  // your network password
 
 DTime currentTime;
 unsigned int localPort = 2390;      // local port to listen for UDP packets
-unsigned int porogTemp = 22;
+unsigned int porogTemp = 11;
 
 int hysteresis = 2;
+unsigned long timeFromSync = millis();
+unsigned long epoch;
 
 /* Don't hardwire the IP address or we won't get the benefits of the pool.
     Lookup the IP address for the host name instead */
@@ -52,7 +54,7 @@ float temperature;
 
 boolean isHeaterOn;
 
-void setup(){
+void setup() {
   pinMode(RELAY_PIN, OUTPUT);
   Heltec.begin(true /*DisplayEnable Enable*/, true /*Serial Enable*/);
   Heltec.display->setContrast(255);
@@ -73,8 +75,8 @@ void setup(){
   server.onNotFound(handleNotFound);
   server.begin();
 }
- 
-void loop(){
+
+void loop() {
   temperature = getTemperature();
   String ntpTime = getTime();
   isHeaterOn = relayControl(temperature);
@@ -87,30 +89,35 @@ void loop(){
 
 String getTime()
 {
-//  String ret = "";
-  WiFi.hostByName(ntpServerName, timeServerIP);
-  sendNTPpacket(timeServerIP);
-  int cb = udp.parsePacket();
-  if(cb)
+  unsigned long deltaSync = millis() - timeFromSync;
+  if (deltaSync>3600000)
   {
-     udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
+    WiFi.hostByName(ntpServerName, timeServerIP);
+    sendNTPpacket(timeServerIP);
+    int cb = udp.parsePacket();
+    if (cb)
+    {
+      udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
 
-    //the timestamp starts at byte 40 of the received packet and is four bytes,
-    // or two words, long. First, esxtract the two words:
-
-    unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
-    unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
-    // combine the four bytes (two words) into a long integer
-    // this is NTP time (seconds since Jan 1 1900):
-    unsigned long secsSince1900 = highWord << 16 | lowWord;
-        // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
-    const unsigned long seventyYears = 2208988800UL;
-    // subtract seventy years:
-    unsigned long epoch = secsSince1900 - seventyYears;
-    currentTime.setTimestamp(epoch);
+      //the timestamp starts at byte 40 of the received packet and is four bytes,
+      // or two words, long. First, esxtract the two words:
+      unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
+      unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
+      // combine the four bytes (two words) into a long integer
+      // this is NTP time (seconds since Jan 1 1900):
+      unsigned long secsSince1900 = highWord << 16 | lowWord;
+      // Unix time starts on Jan 1 1970. In seconds, that's 2208988800:
+      const unsigned long seventyYears = 2208988800UL;
+      // subtract seventy years:
+      epoch = secsSince1900 - seventyYears;
+    }
   }
+  else{
+    epoch = epoch+((unsigned long)(deltaSync/1000));
+  }
+  currentTime.setTimestamp(epoch);
   char dt[20];
-  sprintf(dt, "%04d-%02d-%02d %02d:%02d:%02d",currentTime.year, currentTime.month, currentTime.day,currentTime.hour, currentTime.minute, currentTime.second);
+  sprintf(dt, "%04d-%02d-%02d %02d:%02d:%02d", currentTime.year, currentTime.month, currentTime.day, currentTime.hour, currentTime.minute, currentTime.second);
   return String(dt);
 }
 
@@ -149,10 +156,10 @@ float getTemperature()
 void displayTemp(float temperature, String ntpTime, boolean isHeat)
 {
   Heltec.display->clear();
-  Heltec.display->setLogBuffer(3, 30); 
+  Heltec.display->setLogBuffer(3, 30);
   Heltec.display->print("Temp C: ");
   Heltec.display->print(temperature);
-  Heltec.display->println(isHeat ? " H On":" H Off");
+  Heltec.display->println(isHeat ? " H On" : " H Off");
   Heltec.display->println(ntpTime);
   Heltec.display->drawLogBuffer(0, 0);
   Heltec.display->display();
@@ -160,14 +167,14 @@ void displayTemp(float temperature, String ntpTime, boolean isHeat)
 
 boolean relayControl(float temperature)
 {
-   if(temperature > porogTemp)
+  if (temperature > porogTemp)
   {
-    digitalWrite(RELAY_PIN,HIGH);
-    return false; 
+    digitalWrite(RELAY_PIN, HIGH);
+    return false;
   }
-  if(temperature < porogTemp-hysteresis)
+  if (temperature < porogTemp - hysteresis)
   {
-    digitalWrite(RELAY_PIN,LOW);
+    digitalWrite(RELAY_PIN, LOW);
     return true;
   }
 }
@@ -175,7 +182,7 @@ boolean relayControl(float temperature)
 void handleRoot() {
   char temp[600];
   snprintf(temp, 600,
-  "<html>\
+           "<html>\
   <head>\
     <meta http-equiv='refresh' content='10'/>\
     <title>Heater</title>\
@@ -202,7 +209,7 @@ void handleRoot() {
            , currentTime.minute
            , currentTime.second
            , (int)temperature
-           , (int)(temperature*100)%100
+           , (int)(temperature * 100) % 100
            , isHeaterOn ? "On" : "Off"
            , porogTemp
           );
@@ -232,9 +239,9 @@ void handleForm() {
   } else {
     String message = "POST form was:\n";
     for (uint8_t i = 0; i < server.args(); i++) {
-      if(server.argName(i) == "porog")
+      if (server.argName(i) == "porog")
       {
-        porogTemp=server.arg(i).toInt();
+        porogTemp = server.arg(i).toInt();
       }
     }
     server.sendHeader("Location", String("/"), true);
