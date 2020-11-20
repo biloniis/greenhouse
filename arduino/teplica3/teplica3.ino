@@ -31,7 +31,7 @@ const char * pass = STAPSK;  // your network password
 
 DTime currentTime;
 unsigned int localPort = 2390;      // local port to listen for UDP packets
-unsigned int porogTemp = 22;
+unsigned int porogTemp = 11;
 
 int hysteresis = 2;
 
