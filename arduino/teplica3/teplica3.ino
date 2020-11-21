@@ -1,3 +1,10 @@
+// Module works on wifi kit8 esp8266 https://heltec.org/project/wifi-kit-8/
+// Relay module (pin D02)
+// Heater - heating cable for floor
+// DS18B20 Temperature Sensor (pin D0)
+// Used NTP server for synchronise time (to additional light for perspective)
+// To control can be used web server. To set temperature range use form on http page. 
+//
 // библиотека для работы с протоколом 1-Wire
 #include <OneWire.h>
 // библиотека для работы с датчиком DS18B20
@@ -34,8 +41,9 @@ unsigned int localPort = 2390;      // local port to listen for UDP packets
 unsigned int porogTemp = 11;
 
 int hysteresis = 2;
-unsigned long timeFromSync = millis();
+unsigned long timeFromSync = 0;
 unsigned long epoch;
+unsigned long deltaTime=millis();
 
 /* Don't hardwire the IP address or we won't get the benefits of the pool.
     Lookup the IP address for the host name instead */
@@ -90,7 +98,7 @@ void loop() {
 String getTime()
 {
   unsigned long deltaSync = millis() - timeFromSync;
-  if (deltaSync>3600000)
+  if (timeFromSync==0||deltaSync>3600000)
   {
     WiFi.hostByName(ntpServerName, timeServerIP);
     sendNTPpacket(timeServerIP);
@@ -98,7 +106,7 @@ String getTime()
     if (cb)
     {
       udp.read(packetBuffer, NTP_PACKET_SIZE); // read the packet into the buffer
-
+      timeFromSync = millis();
       //the timestamp starts at byte 40 of the received packet and is four bytes,
       // or two words, long. First, esxtract the two words:
       unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
@@ -113,7 +121,8 @@ String getTime()
     }
   }
   else{
-    epoch = epoch+((unsigned long)(deltaSync/1000));
+    epoch = epoch+((unsigned long)((millis()-deltaTime)/1000));
+    deltaTime=millis();
   }
   currentTime.setTimestamp(epoch);
   char dt[20];
@@ -180,8 +189,8 @@ boolean relayControl(float temperature)
 }
 
 void handleRoot() {
-  char temp[600];
-  snprintf(temp, 600,
+  char temp[800];
+  snprintf(temp, 800,
            "<html>\
   <head>\
     <meta http-equiv='refresh' content='10'/>\
@@ -194,9 +203,11 @@ void handleRoot() {
     <h1>Winter garden heater condition</h1>\
     <p>Time: %4d-%2d-%2d %02d:%02d:%02d</p>\
     <p>Temperature: %d.%02d &#8451; </p>\
+    <p>Temperature range: %d - %d  &#8451;</p>\
     <p>Heater: %s</p>\
     <form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/postform/\">\
     <p>Porog temperature: <input type=\"text\" name=\"porog\" value=\"%d\"> &#8451;</p>\
+    <p>Hysteresis:  <input type=\"text\" name=\"hyst\" value=\"%d\"> &#8451;</p>\
     <input type=\"submit\" value=\"Submit\">\
     </form>\
   </body>\
@@ -210,8 +221,11 @@ void handleRoot() {
            , currentTime.second
            , (int)temperature
            , (int)(temperature * 100) % 100
+           , porogTemp-hysteresis
+           , porogTemp
            , isHeaterOn ? "On" : "Off"
            , porogTemp
+           , hysteresis
           );
   server.send(200, "text/html", temp);
 }
@@ -242,6 +256,10 @@ void handleForm() {
       if (server.argName(i) == "porog")
       {
         porogTemp = server.arg(i).toInt();
+      }
+      if (server.argName(i) == "hyst")
+      {
+        hysteresis = server.arg(i).toInt();
       }
     }
     server.sendHeader("Location", String("/"), true);
